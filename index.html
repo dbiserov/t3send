@@ -1,0 +1,779 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Send to T3: from email and Slack into T3 threads</title>
+<meta name="description" content="A 30-second demo: start a T3 thread from an email, link a Slack message to it, and see both marked done when you settle it.">
+<meta property="og:title" content="Send to T3: from email and Slack into T3 threads">
+<meta property="og:description" content="A 30-second demo: start a T3 thread from an email, link a Slack message to it, and see both marked done when you settle it.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dbiserov.github.io/send-to-t3-demo/">
+<meta property="og:image" content="https://dbiserov.github.io/send-to-t3-demo/preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+@font-face { font-family: "Inter Variable"; font-style: normal; font-weight: 100 900; src: url(inter-latin.woff2) format("woff2-variations"); }
+:root {
+  --ui: "Inter Variable", Inter, "Segoe UI", system-ui, sans-serif;
+  /* T3 Code's dark theme (apps/web/src/index.css) */
+  --t3-bg: #000; --t3-fg: #f5f5f5; --t3-muted: #a3a3a3; --t3-faint: #5c5c5c;
+  --t3-card: #111111; --t3-message: #1e1e1e; --t3-border: rgba(255,255,255,.08);
+  --t3-primary: #346bf1; --t3-info: #60a5fa; --t3-success: #34d399;
+  --bubble: #1a7fe6;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; color: #fff; font-family: var(--ui); -webkit-font-smoothing: antialiased; }
+body { padding: 24px; }
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+svg.g { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+
+#wrap { position: relative; width: 100%; max-width: min(1280px, calc((100vh - 120px) * 16 / 9)); margin: 0 auto; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
+#stage { position: absolute; left: 0; top: 0; width: 1280px; height: 720px; transform-origin: 0 0; overflow: hidden; }
+#stage.instant *, #stage.instant *::before, #stage.instant *::after { transition: none !important; animation: none !important; }
+#viewport { position: absolute; left: 0; top: 0; width: 1280px; height: 648px; overflow: hidden; }
+#cam { position: absolute; left: 0; top: 0; width: 1280px; height: 648px; transform-origin: 0 0; transition: transform .8s cubic-bezier(.65,0,.3,1); will-change: transform; }
+
+/* Browser window */
+.win { position: absolute; left: 56px; top: 30px; width: 1168px; height: 590px; border-radius: 14px; background: #121214; display: flex; flex-direction: column;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.09), 0 30px 80px rgba(0,0,0,.7); overflow: hidden; }
+.tbar { height: 48px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+.tbar .nav { width: 30px; height: 30px; display: grid; place-items: center; color: #7d7d86; }
+.url { flex: 1; max-width: 640px; margin: 0 auto; height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 14px; border-radius: 9px; background: #1d1d21; color: #c9c9d1; font-size: 13.5px; }
+.url .fav { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; transition: background-color .3s ease; }
+.url .fav svg { width: 11px; height: 11px; }
+.tbar .ext { width: 32px; height: 32px; display: grid; place-items: center; color: #e4e4ea; border-radius: 8px; }
+.view { position: relative; flex: 1; margin: 0 6px 6px; border-radius: 10px; overflow: hidden; background: #111; }
+.app { position: absolute; inset: 0; opacity: 0; transition: opacity .45s ease; }
+.view[data-app="gmail"] #gmail, .view[data-app="slack"] #slack { opacity: 1; }
+
+/* Gmail, dark */
+#gmail { background: #18181a; color: #e3e3e3; display: flex; flex-direction: column; font-size: 14px; }
+.g-top { height: 64px; display: flex; align-items: center; gap: 24px; padding: 0 20px; flex: none; }
+.g-logo { width: 172px; display: flex; align-items: center; gap: 10px; font-size: 20px; color: #e3e3e3; }
+.g-logo .m { width: 28px; height: 22px; border-radius: 5px; background: #d93025; display: grid; place-items: center; color: #fff; }
+.g-logo .m svg { width: 15px; height: 15px; }
+.g-search { flex: 1; max-width: 620px; height: 44px; border-radius: 22px; background: #2a2b2f; display: flex; align-items: center; gap: 12px; padding: 0 18px; color: #9aa0a6; font-size: 15px; }
+.g-body { flex: 1; display: flex; min-height: 0; }
+.g-nav { width: 196px; padding: 4px 10px 0 8px; flex: none; }
+.g-nav .n { height: 34px; display: flex; align-items: center; gap: 14px; padding: 0 14px 0 16px; border-radius: 0 17px 17px 0; color: #c4c7c5; font-size: 14px; }
+.g-nav .n svg { width: 18px; height: 18px; }
+.g-nav .n b { margin-left: auto; font-weight: 600; font-size: 13px; }
+.g-nav .n.on { background: #36373b; color: #fff; font-weight: 600; }
+.g-list { flex: 1; margin: 0 16px 14px 0; border-radius: 16px; background: #202124; overflow: hidden; }
+.g-head { height: 44px; display: flex; align-items: center; gap: 18px; padding: 0 16px; color: #c4c7c5; border-bottom: 1px solid #2d2e31; font-size: 14px; }
+.g-head .tab { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px; }
+.g-head .tab.on { color: #8ab4f8; box-shadow: inset 0 -3px 0 #8ab4f8; font-weight: 500; }
+.g-row { position: relative; height: 46px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid #2a2b2e; color: #c4c7c5; transition: background-color .2s ease, box-shadow .2s ease; }
+.g-row.unread { color: #fff; }
+.g-row.unread .from, .g-row.unread .subj b { font-weight: 700; }
+.g-row.hover { background: #2b2c30; box-shadow: inset 0 0 0 1px #3c3d42; }
+.cb { width: 18px; height: 18px; border: 2px solid #6c6f74; border-radius: 3px; flex: none; margin-right: 18px; }
+.from { width: 170px; flex: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.subj { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; }
+.subj b { font-weight: 500; flex: none; }
+.snip { color: #9aa0a6; overflow: hidden; text-overflow: ellipsis; }
+.time { width: 80px; flex: none; text-align: right; font-size: 12.5px; transition: opacity .15s ease; }
+.g-hb { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; opacity: 0; transition: opacity .2s ease; background: #2b2c30; padding-left: 10px; }
+.g-row.hover .g-hb { opacity: 1; }
+.g-row.hover .time { opacity: 0; }
+.ib { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: #c4c7c5; transition: background-color .15s ease, color .15s ease; }
+.ib.hot { background: rgba(255,255,255,.12); color: #fff; }
+.ib svg.i { width: 19px; height: 19px; }
+.ib svg.g { width: 20px; height: 20px; }
+
+/* The add-on's bubble */
+.bub { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; flex: none; transition: background-color .15s ease; }
+.bub svg { width: 19px; height: 19px; }
+.bub[data-link="none"] { display: none; }
+.bub[data-link="open"] { color: var(--bubble); }
+.bub[data-link="settled"] { color: #fff; }
+.bub.hot { background: rgba(255,255,255,.12); }
+.bub.pop svg { animation: bubpop .65s cubic-bezier(.2,.9,.3,1.25); }
+@keyframes bubpop { 0% { transform: scale(.2); opacity: 0; } 55% { transform: scale(1.22); opacity: 1; } 100% { transform: scale(1); } }
+
+/* Slack, dark, Activity */
+#slack { background: #1a1d21; color: #d1d2d3; display: flex; font-family: Lato, var(--ui); font-size: 14.5px; }
+.s-rail { width: 72px; flex: none; background: #131417; display: flex; flex-direction: column; align-items: center; padding-top: 14px; gap: 6px; }
+.s-ws { width: 38px; height: 38px; border-radius: 10px; background: #e8912d; color: #1a1d21; display: grid; place-items: center; font-weight: 800; font-size: 18px; margin-bottom: 10px; }
+.s-nav { width: 60px; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 11px; color: #c8c9cb; padding: 4px 0; }
+.s-nav .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
+.s-nav .ic svg { width: 20px; height: 20px; }
+.s-nav.on .ic { background: #34363b; color: #fff; }
+.s-nav.on { color: #fff; font-weight: 700; }
+.s-act { width: 470px; flex: none; border-right: 1px solid #2c2d30; display: flex; flex-direction: column; background: #1a1d21; }
+.s-ah { height: 56px; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 20px; flex: none; }
+.s-ah h3 { margin: 0; flex: 1; font-size: 18px; font-weight: 800; color: #fff; }
+.s-tool { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; color: #c8c9cb; border: 1px solid transparent; }
+.s-tool svg { width: 17px; height: 17px; }
+.s-tool.on { color: var(--bubble); border-color: rgba(26,127,230,.45); background: rgba(26,127,230,.12); }
+.s-tool.sel { background: #34363b; color: #fff; }
+.s-gap { width: 10px; }
+.s-tabs { display: flex; gap: 18px; padding: 0 20px; height: 38px; align-items: flex-end; border-bottom: 1px solid #2c2d30; font-size: 14px; color: #b9babd; flex: none; }
+.s-tabs span { padding-bottom: 10px; }
+.s-tabs .on { color: #fff; font-weight: 700; box-shadow: inset 0 -2px 0 #fff; }
+.s-item { position: relative; height: 46px; display: flex; align-items: center; gap: 9px; padding: 0 16px 0 20px; border-bottom: 1px solid #24272b; transition: background-color .2s ease; }
+.s-item.hover { background: #222529; }
+.s-av { width: 22px; height: 22px; border-radius: 6px; flex: none; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+.s-who { font-weight: 800; color: #fff; flex: none; font-size: 14px; }
+.s-kind { color: #9a9b9e; display: flex; flex: none; }
+.s-kind svg { width: 14px; height: 14px; }
+.s-col { width: 58px; flex: none; display: flex; align-items: center; justify-content: flex-start; gap: 2px; }
+.s-col .bub { width: 26px; height: 26px; }
+.s-col .bub[data-link="none"] { display: inline-grid; visibility: hidden; }
+.st { width: 26px; height: 26px; display: inline-grid; place-items: center; border-radius: 6px; color: #8b8c8f; transition: background-color .15s ease, color .15s ease; }
+.st svg { width: 18px; height: 18px; }
+.st.hot { background: rgba(255,255,255,.12); color: #fff; }
+.s-txt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #c8c9cb; }
+.s-txt i { font-style: normal; color: #9a9b9e; }
+.s-time { font-size: 12px; color: #9a9b9e; flex: none; }
+.s-conv { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.s-ch { height: 56px; display: flex; align-items: center; padding: 0 22px; border-bottom: 1px solid #2c2d30; font-weight: 800; color: #fff; font-size: 17px; flex: none; }
+.s-msgs { flex: 1; padding: 14px 0 0; }
+.msg { display: flex; gap: 10px; padding: 8px 22px; }
+.msg.hl { background: #2a2a1e; box-shadow: inset 3px 0 0 #e8b31a; }
+.msg .av { width: 36px; height: 36px; border-radius: 8px; flex: none; display: grid; place-items: center; font-weight: 800; color: #fff; }
+.msg .who { font-weight: 800; color: #fff; }
+.msg .ts { font-size: 12px; color: #9a9b9e; margin-left: 6px; }
+.msg p { margin: 3px 0 0; line-height: 1.46; }
+.s-box { margin: 0 20px 16px; height: 74px; border: 1px solid #4a4c50; border-radius: 10px; padding: 12px 14px; color: #8a8b8d; flex: none; }
+
+/* Composer card: T3's new-thread screen */
+#composer { position: absolute; left: 50%; top: 50%; width: 640px; height: 318px; transform: translate(-50%, -47%) scale(.97); opacity: 0; pointer-events: none;
+  background: var(--t3-bg); color: var(--t3-fg); border-radius: 16px; box-shadow: 0 0 0 1px rgba(255,255,255,.1), 0 28px 80px rgba(0,0,0,.75), 0 6px 18px rgba(0,0,0,.5);
+  overflow: hidden; font-family: var(--ui); font-size: 14px; z-index: 5;
+  transition: opacity .24s ease, transform .3s cubic-bezier(.2,.8,.2,1), width .38s cubic-bezier(.2,.8,.2,1), height .38s cubic-bezier(.2,.8,.2,1); }
+#composer:not([data-state="hidden"]) { opacity: 1; transform: translate(-50%, -50%); }
+#composer[data-state="link"] { height: 446px; }
+#composer[data-state="mini"], #composer[data-state="done"] { width: 232px; height: 112px; }
+.c-full { position: absolute; left: 0; top: 0; width: 640px; transition: opacity .15s ease; }
+#composer[data-state="mini"] .c-full, #composer[data-state="done"] .c-full { opacity: 0; }
+.c-mini { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 13.5px; opacity: 0; transition: opacity .2s ease .12s; }
+#composer[data-state="mini"] .c-mini, #composer[data-state="done"] .c-mini { opacity: 1; }
+.spin { width: 22px; height: 22px; border: 2px solid rgba(255,255,255,.16); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+.c-mini .tick { display: none; width: 26px; height: 26px; stroke-width: 2.25; }
+#composer[data-state="done"] .spin { display: none; }
+#composer[data-state="done"] .c-mini .tick { display: block; animation: bubpop .35s ease-out; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.crumbs { display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 12px 0 20px; font-size: 14px; }
+.crumbs .p { color: var(--t3-muted); }
+.crumbs .sep { color: var(--t3-faint); }
+.crumbs .here { font-weight: 500; }
+.crumbs .sp { flex: 1; }
+.icon-b { width: 28px; height: 28px; display: grid; place-items: center; color: var(--t3-muted); border-radius: 8px; }
+.c-main { padding: 8px 24px 0; }
+.c-main h1 { margin: 0 0 20px; font-size: 26px; line-height: 34px; font-weight: 400; text-align: center; letter-spacing: -.01em; }
+.c-main h1 u { text-decoration-style: dotted; text-decoration-color: rgba(255,255,255,.35); text-decoration-thickness: 2px; text-underline-offset: 6px; }
+.tabs { display: inline-flex; gap: 2px; margin: 0 0 8px; padding: 2px; border-radius: 10px; background: rgba(255,255,255,.03); box-shadow: 0 0 0 1px rgba(255,255,255,.05); }
+.tab3 { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 8px; color: var(--t3-muted); font-size: 13px; font-weight: 500; transition: background-color .2s ease, color .2s ease, box-shadow .2s ease; }
+.tab3 svg { width: 14px; height: 14px; }
+.tab3.on { background: #0e0e0e; color: var(--t3-fg); box-shadow: 0 0 0 1px var(--t3-border), 0 1px 2px rgba(0,0,0,.5); }
+.tab3.hot:not(.on) { color: var(--t3-fg); }
+.c-card { border-radius: 16px; background: #0e0e0e; box-shadow: 0 0 0 1px rgba(255,255,255,.05), inset 0 1px 0 rgba(255,255,255,.03); }
+.c-new, .c-link { display: none; }
+#composer[data-state="new"] .c-new, #composer.was-new .c-new { display: block; }
+#composer[data-state="link"] .c-link, #composer.was-link .c-link { display: flex; }
+.c-inner { padding: 14px 16px 6px; }
+.ctx { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; height: 28px; padding: 0 6px 0 8px; border: 1px solid var(--t3-border); border-radius: 8px; background: rgba(255,255,255,.04); margin-bottom: 10px; }
+.ctx .src { color: var(--t3-muted); font-size: 12px; font-weight: 500; }
+.ctx .ttl { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctx svg { width: 14px; height: 14px; color: var(--t3-muted); }
+.ta { min-height: 50px; font-size: 14.5px; line-height: 1.65; }
+.ta .ph { color: var(--t3-muted); }
+.caret { display: inline-block; width: 1.5px; height: 17px; margin-left: 1px; vertical-align: -3px; background: #fff; animation: blink 1s steps(1) infinite; visibility: hidden; }
+.focus .caret { visibility: visible; }
+@keyframes blink { 50% { opacity: 0; } }
+.bar { display: flex; align-items: center; gap: 2px; padding: 2px 10px 10px; }
+.grow { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 9px; border-radius: 8px; color: var(--t3-muted); font-size: 14px; white-space: nowrap; }
+.chip.model { color: rgba(245,245,245,.85); font-weight: 500; }
+.chip.model svg { width: 15px; height: 15px; }
+.send { width: 32px; height: 32px; margin-left: 6px; display: grid; place-items: center; border-radius: 50%; background: #13163a; color: #9a9aa0; transition: background-color .2s ease, color .2s ease, transform .15s ease; }
+.send.ready { background: var(--t3-primary); color: #fff; }
+.send.hot { background: #4a7df5; transform: scale(1.06); }
+.send svg { width: 17px; height: 17px; stroke-width: 2.4; }
+.c-link { flex-direction: column; height: 300px; overflow: hidden; }
+.lhead { padding: 12px 16px 0; font-size: 12px; color: var(--t3-muted); }
+.search { display: flex; align-items: center; gap: 8px; margin: 6px 12px 4px; padding: 6px 4px 8px; border-bottom: 1px solid var(--t3-border); color: var(--t3-muted); transition: border-color .2s ease; }
+.search.focus { border-bottom-color: var(--t3-primary); }
+.search .q { flex: 1; color: var(--t3-fg); }
+.search .q .ph { color: var(--t3-muted); }
+.list { padding: 2px 6px 6px; }
+.divider { padding: 9px 8px 4px; font-size: 12px; color: var(--t3-muted); border-top: 1px solid rgba(245,245,245,.1); margin-top: 4px; }
+.divider.first { border-top: 0; margin-top: 0; padding-top: 4px; }
+.opt { display: flex; align-items: center; gap: 9px; min-height: 42px; padding: 6px 8px; border-radius: 7px; transition: background-color .15s ease; }
+.opt.active { background: rgba(255,255,255,.08); }
+.opt .work { color: var(--t3-info); display: flex; width: 13px; }
+.opt .work svg { width: 13px; height: 13px; stroke-width: 2.4; }
+.opt .nowork { width: 13px; }
+.opt .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.opt .nm { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt .meta { font-size: 12px; color: var(--t3-muted); }
+.opt .chk { color: #fff; visibility: hidden; }
+.opt.checked .chk { visibility: visible; }
+.opt.settled .nm { color: var(--t3-muted); }
+.gone { display: none !important; }
+.hl { color: #8fb0ff; }
+
+/* The bubble's list */
+#pop { position: absolute; width: 350px; padding: 6px; border-radius: 10px; border: 1px solid rgba(245,245,245,.1); background: rgba(17,17,17,.97); color: var(--t3-fg); z-index: 6;
+  box-shadow: 0 16px 48px rgba(0,0,0,.65), 0 4px 12px rgba(0,0,0,.45); font-family: var(--ui); opacity: 0; transform: translateY(-4px) scale(.98); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+#pop.show { opacity: 1; transform: none; }
+#pop .ph { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 2px 8px; font-size: 12px; color: var(--t3-muted); }
+
+/* T3 Code */
+#t3 { position: absolute; left: 76px; top: 24px; width: 1128px; height: 600px; display: flex; flex-direction: column; border-radius: 12px; background: var(--t3-bg); color: var(--t3-fg); font-family: var(--ui); font-size: 14px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.11), 0 30px 90px rgba(0,0,0,.8); overflow: hidden; opacity: 0; transform: translateY(16px) scale(.985); pointer-events: none; z-index: 8;
+  transition: opacity .4s ease, transform .5s cubic-bezier(.2,.8,.2,1); }
+#t3.show { opacity: 1; transform: none; }
+.t3-body { flex: 1; display: flex; min-height: 0; }
+.t3-side { width: 290px; flex: none; display: flex; flex-direction: column; padding: 10px 8px 10px; background: var(--t3-card); border-right: 1px solid var(--t3-border); }
+.t3-brand { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px; font-size: 14px; }
+.t3-brand b { font-weight: 700; letter-spacing: -.02em; }
+.t3-brand span { color: var(--t3-muted); }
+.t3-brand .sp { flex: 1; }
+.t3-act { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; color: #d4d4d4; font-size: 14px; }
+.t3-act svg { width: 15px; height: 15px; color: var(--t3-muted); }
+.t3-list { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.card { position: relative; border-radius: 6px; padding: 8px 10px; transition: background-color .2s ease, opacity .35s ease, transform .45s cubic-bezier(.4,0,.2,1), max-height .45s ease, padding .45s ease; max-height: 70px; overflow: hidden; }
+.card.on { background: rgba(255,255,255,.07); }
+.card.hover { background: rgba(255,255,255,.09); }
+.card .l1 { display: flex; align-items: center; gap: 6px; height: 20px; font-size: 12px; color: var(--t3-muted); }
+.card .pf { width: 16px; height: 16px; border-radius: 4px; background: #2f3b52; display: grid; place-items: center; color: #b7c6e4; font-size: 9px; font-weight: 700; flex: none; }
+.card .pn { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .stat { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; transition: opacity .15s ease; }
+.card .stat svg { width: 15px; height: 15px; }
+.card .stat.working { color: var(--t3-info); }
+.card .stat.done { color: var(--t3-success); }
+.card .stat.time { font-weight: 400; }
+.card .settle { position: absolute; right: 6px; top: 8px; height: 20px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 6px; font-size: 12px; color: var(--t3-muted); opacity: 0; transition: opacity .15s ease, color .15s ease, background-color .15s ease; }
+.card .settle svg { width: 14px; height: 14px; }
+.card.hover .settle { opacity: 1; }
+.card.hover .stat { opacity: 0; }
+.card .settle.hot { color: var(--t3-fg); background: rgba(255,255,255,.08); }
+.card .l2 { margin-top: 4px; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.recede .l2 { font-weight: 400; color: rgba(245,245,245,.75); }
+.card.leaving { max-height: 0; padding-top: 0; padding-bottom: 0; opacity: 0; transform: translateY(40px); }
+.t3-fill { flex: 1; }
+.shelf { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; font-size: 13px; font-weight: 500; color: var(--t3-muted); }
+.shelf .n { font-weight: 400; transition: color .3s ease; }
+.shelf .n.bump { color: #fff; }
+.shelf svg { width: 13px; height: 13px; }
+.undo { height: 24px; padding: 0 10px; font-size: 11px; line-height: 24px; color: var(--t3-muted); opacity: 0; transition: opacity .25s ease; }
+.undo.show { opacity: 1; }
+.undo u { text-decoration: none; color: var(--t3-fg); }
+.t3-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.t3-h { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 22px; border-bottom: 1px solid var(--t3-border); flex: none; font-size: 14px; }
+.t3-h .pf { width: 14px; height: 14px; border-radius: 3px; background: #2f3b52; flex: none; }
+.t3-h .crumb { color: var(--t3-muted); }
+.t3-h .sep { color: var(--t3-faint); }
+.t3-h .t { font-weight: 500; }
+.t3-conv { flex: 1; padding: 28px 0 0; overflow: hidden; }
+.t3-col { max-width: 700px; margin: 0 auto; padding: 0 28px; }
+.umsg { margin-left: auto; width: fit-content; max-width: 80%; padding: 11px 16px; border-radius: 16px; background: var(--t3-message); font-size: 14px; line-height: 1.6; }
+.umsg .lk { color: #8fb0ff; font-size: 13px; }
+.working { display: flex; align-items: baseline; gap: 8px; height: 30px; margin-top: 18px; padding: 0 4px; font-size: 14px; color: var(--t3-muted); border-bottom: 1px solid rgba(255,255,255,.05); transition: opacity .3s ease; }
+.working.gone2 { opacity: 0; }
+.amsg { margin-top: 14px; font-size: 14.5px; line-height: 1.65; color: #e8e8e8; }
+.amsg p { margin: 0 0 12px; opacity: 0; transform: translateY(5px); transition: opacity .5s ease, transform .5s ease; }
+.amsg p.in { opacity: 1; transform: none; }
+.amsg code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; background: rgba(255,255,255,.07); padding: 1px 6px; border-radius: 5px; }
+.t3-comp { margin: 0 auto 20px; width: 644px; border-radius: 16px; background: #0e0e0e; box-shadow: 0 0 0 1px rgba(255,255,255,.06); flex: none; }
+.t3-comp .ph { padding: 14px 16px 6px; color: var(--t3-muted); font-size: 14px; }
+
+/* Cursor, caption */
+#cursor { position: absolute; left: 0; top: 0; width: 22px; height: 22px; pointer-events: none; z-index: 50; }
+#cursor svg { width: 22px; height: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); transition: transform .12s ease; transform-origin: 3px 2px; }
+#cursor.down svg { transform: scale(.8); }
+.ripple { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid rgba(255,255,255,.8); pointer-events: none; z-index: 49; animation: ripple .55s ease-out forwards; }
+@keyframes ripple { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+#caption { position: absolute; left: 0; right: 0; top: 648px; height: 72px; display: flex; align-items: center; justify-content: center; }
+#caption span { font-size: 27px; line-height: 34px; color: #fff; text-align: center; letter-spacing: -.005em; transition: opacity .25s ease, transform .25s ease; }
+#caption span.out { opacity: 0; transform: translateY(5px); }
+
+/* Controls */
+#controls { max-width: min(1280px, calc((100vh - 120px) * 16 / 9)); margin: 0 auto; display: flex; align-items: center; gap: 12px; padding: 18px 0 0; flex-wrap: wrap; }
+#play { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; border: 1px solid #285478; background: #000; color: #fff; cursor: pointer; flex: none; }
+#chapters { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.chap { position: relative; height: 34px; padding: 0 13px; border-radius: 8px; border: 1px solid #1d3a5c; background: #000; color: #fff; font: 500 13.5px var(--ui); cursor: pointer; overflow: hidden; }
+.chap.on { border-color: #346bf1; }
+.chap .fill { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: #346bf1; }
+.chap span { position: relative; }
+@media (max-width: 600px) { body { padding: 0; } #controls { padding: 12px 8px 0; } }
+@media (prefers-reduced-motion: reduce) { #cursor { display: none; } #cam { transition: none; } }
+</style>
+</head>
+<body>
+<div id="wrap"><div id="stage">
+ <div id="viewport"><div id="cam">
+
+  <div class="win" id="win">
+    <div class="tbar">
+      <span class="nav"><svg class="i"><use href="#i-left"/></svg></span>
+      <span class="nav"><svg class="i"><use href="#i-right"/></svg></span>
+      <span class="nav"><svg class="i"><use href="#i-reload"/></svg></span>
+      <div class="url"><span class="fav" id="url-fav" style="background:#d93025"><svg class="i" style="color:#fff"><use href="#i-mail"/></svg></span><span id="url">mail.google.com</span></div>
+      <span class="ext" title="Send to T3"><svg class="g"><use href="#i-start"/></svg></span>
+    </div>
+    <div class="view" id="view" data-app="gmail">
+
+      <section class="app" id="gmail">
+        <div class="g-top">
+          <div class="g-logo"><span class="m"><svg class="i"><use href="#i-mail"/></svg></span>Mail</div>
+          <div class="g-search"><svg class="i"><use href="#i-search"/></svg>Search mail</div>
+        </div>
+        <div class="g-body">
+          <div class="g-nav">
+            <div class="n on"><svg class="i"><use href="#i-inbox"/></svg>Inbox<b>6</b></div>
+            <div class="n"><svg class="i"><use href="#i-star"/></svg>Starred</div>
+            <div class="n"><svg class="i"><use href="#i-clock"/></svg>Snoozed</div>
+            <div class="n"><svg class="i"><use href="#i-send"/></svg>Sent</div>
+            <div class="n"><svg class="i"><use href="#i-file"/></svg>Drafts</div>
+          </div>
+          <div class="g-list">
+            <div class="g-head"><span class="tab on"><svg class="i"><use href="#i-inbox"/></svg>Primary</span><span class="tab">Updates</span><span class="tab">Promotions</span></div>
+            <div class="g-row unread" id="row-lena">
+              <span class="cb"></span><span class="from">Lena Park</span>
+              <span class="subj"><span class="bub" id="bub-gmail" data-link="none"></span><b>Revised partnership terms</b><span class="snip">· Hi, attached are the updated terms we discussed on Tuesday. The main changes are</span></span>
+              <span class="time">9:41 AM</span>
+              <span class="g-hb">
+                <span class="ib" id="g-start"><svg class="g"><use href="#i-start"/></svg></span>
+                <span class="ib"><svg class="i"><use href="#i-archive"/></svg></span>
+                <span class="ib"><svg class="i"><use href="#i-trash"/></svg></span>
+                <span class="ib"><svg class="i"><use href="#i-mail"/></svg></span>
+                <span class="ib"><svg class="i"><use href="#i-clock"/></svg></span>
+              </span>
+            </div>
+            <div class="g-row unread"><span class="cb"></span><span class="from">Omar Haddad</span><span class="subj"><b>Workshop dates for December</b><span class="snip">· Would the 9th or the 11th work better for your team?</span></span><span class="time">9:12 AM</span></div>
+            <div class="g-row"><span class="cb"></span><span class="from">Priya Nair</span><span class="subj"><b>Re: Homepage copy, round two</b><span class="snip">· Thanks, these read much better. One note on pricing</span></span><span class="time">8:47 AM</span></div>
+            <div class="g-row"><span class="cb"></span><span class="from">Invoice Desk</span><span class="subj"><b>Your November invoice is ready</b><span class="snip">· Invoice #2048 for November is attached</span></span><span class="time">7:30 AM</span></div>
+            <div class="g-row unread"><span class="cb"></span><span class="from">Jonas Berg</span><span class="subj"><b>Quick question about the API limits</b><span class="snip">· Are the limits per key or per account? We hit</span></span><span class="time">Yesterday</span></div>
+            <div class="g-row"><span class="cb"></span><span class="from">Sam Ortiz</span><span class="subj"><b>Notes from the Northwind call</b><span class="snip">· Quick summary of what we agreed and the open points</span></span><span class="time">Mon</span></div>
+            <div class="g-row"><span class="cb"></span><span class="from">Calendar</span><span class="subj"><b>Weekly planning moved to Thursday</b><span class="snip">· The weekly planning call is now on Thursday at 10:00</span></span><span class="time">Mon</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="app" id="slack">
+        <div class="s-rail">
+          <div class="s-ws">N</div>
+          <div class="s-nav"><span class="ic"><svg class="i"><use href="#i-home"/></svg></span>Home</div>
+          <div class="s-nav"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>DMs</div>
+          <div class="s-nav on"><span class="ic"><svg class="i"><use href="#i-bell"/></svg></span>Activity</div>
+          <div class="s-nav"><span class="ic"><svg class="i"><use href="#i-bookmark"/></svg></span>Later</div>
+        </div>
+        <div class="s-act">
+          <div class="s-ah"><h3>Activity</h3>
+            <span class="s-tool on" title="T3 buttons on every item"><svg class="g" style="width:17px;height:17px"><use href="#i-bubble"/></svg></span><span class="s-gap"></span>
+            <span class="s-tool"><svg class="i"><use href="#i-rows"/></svg></span><span class="s-tool sel"><svg class="i"><use href="#i-dense"/></svg></span></div>
+          <div class="s-tabs"><span class="on">All</span><span>Mentions</span><span>Threads</span><span>Reactions</span><span>Apps</span></div>
+          <div class="s-item" id="act-lena"><span class="s-av" style="background:#b4513a">L</span><span class="s-who">Lena Park</span><span class="s-kind"><svg class="i"><use href="#i-at"/></svg></span>
+            <span class="s-col"><span class="bub" id="bub-slack" data-link="none"></span><span class="st" id="s-start"><svg class="g"><use href="#i-start"/></svg></span></span>
+            <span class="s-txt"><i>#partnerships</i> Sent the revised terms over email. Can we close this before Friday?</span><span class="s-time">10:02</span></div>
+          <div class="s-item"><span class="s-av" style="background:#2f7d6d">S</span><span class="s-who">Sam Ortiz</span><span class="s-kind"><svg class="i"><use href="#i-msg"/></svg></span>
+            <span class="s-col"><span class="bub" data-link="none"></span><span class="st"><svg class="g"><use href="#i-start"/></svg></span></span>
+            <span class="s-txt"><i>#launch</i> Staging is green, shipping at 3.</span><span class="s-time">9:47</span></div>
+          <div class="s-item"><span class="s-av" style="background:#7c4dbb">P</span><span class="s-who">Priya Nair</span><span class="s-kind"><svg class="i"><use href="#i-at"/></svg></span>
+            <span class="s-col"><span class="bub" data-link="none"></span><span class="st"><svg class="g"><use href="#i-start"/></svg></span></span>
+            <span class="s-txt"><i>#design</i> Can you look at the new pricing table before lunch?</span><span class="s-time">9:30</span></div>
+          <div class="s-item"><span class="s-av" style="background:#3b6fb6">O</span><span class="s-who">Omar Haddad</span><span class="s-kind"><svg class="i"><use href="#i-smile"/></svg></span>
+            <span class="s-col"><span class="bub" data-link="none"></span><span class="st"><svg class="g"><use href="#i-start"/></svg></span></span>
+            <span class="s-txt"><i>#general</i> reacted to your message</span><span class="s-time">9:12</span></div>
+          <div class="s-item"><span class="s-av" style="background:#8a6d1f">J</span><span class="s-who">Jonas Berg</span><span class="s-kind"><svg class="i"><use href="#i-at"/></svg></span>
+            <span class="s-col"><span class="bub" data-link="none"></span><span class="st"><svg class="g"><use href="#i-start"/></svg></span></span>
+            <span class="s-txt"><i>DM</i> Are the limits per key or per account?</span><span class="s-time">Tue</span></div>
+          <div class="s-item"><span class="s-av" style="background:#2f7d6d">S</span><span class="s-who">Sam Ortiz</span><span class="s-kind"><svg class="i"><use href="#i-at"/></svg></span>
+            <span class="s-col"><span class="bub" data-link="none"></span><span class="st"><svg class="g"><use href="#i-start"/></svg></span></span>
+            <span class="s-txt"><i>#partnerships</i> Added the call notes to the doc.</span><span class="s-time">Mon</span></div>
+        </div>
+        <div class="s-conv">
+          <div class="s-ch"># partnerships</div>
+          <div class="s-msgs">
+            <div class="msg"><div class="av" style="background:#2f7d6d">S</div><div><span class="who">Sam Ortiz</span><span class="ts">9:58 AM</span><p>Lena said the revised terms are on their way. The payment window is still the sticking point.</p></div></div>
+            <div class="msg hl"><div class="av" style="background:#b4513a">L</div><div><span class="who">Lena Park</span><span class="ts">10:02 AM</span><p>Sent the revised terms over email. Can we close this before Friday?</p></div></div>
+            <div class="msg"><div class="av" style="background:#7c4dbb">P</div><div><span class="who">Priya Nair</span><span class="ts">10:06 AM</span><p>Happy to join the call if that helps.</p></div></div>
+          </div>
+          <div class="s-box">Message #partnerships</div>
+        </div>
+      </section>
+
+      <div id="composer" data-state="hidden">
+        <div class="c-full">
+          <div class="crumbs"><span class="p">Main Workspace</span><span class="sep">/</span><span class="here">New thread</span><span class="sp"></span>
+            <span class="icon-b"><svg class="i"><use href="#i-min"/></svg></span><span class="icon-b"><svg class="i"><use href="#i-x"/></svg></span></div>
+          <div class="c-main">
+            <h1>What should we build in <u>Main Workspace</u>?</h1>
+            <div class="tabs">
+              <span class="tab3 on" id="tab-new"><svg class="g"><use href="#i-start"/></svg>New thread</span>
+              <span class="tab3" id="tab-link"><svg class="g"><use href="#i-link"/></svg>Link to a thread</span>
+            </div>
+            <div class="c-card c-new">
+              <div class="c-inner">
+                <div class="ctx"><span class="src" id="ctx-src">Gmail</span><span class="ttl" id="ctx-ttl">Revised partnership terms</span><svg class="i"><use href="#i-chev"/></svg></div>
+                <div class="ta" id="ta"><span id="ta-text"></span><span class="caret"></span><span class="ph" id="ta-ph">Ask anything, @tag files/folders, or use / to show available commands</span></div>
+              </div>
+              <div class="bar">
+                <span class="grow"></span>
+                <span class="chip model"><svg class="i" viewBox="0 0 24 24" style="fill:#d97757;stroke:none"><use href="#i-claude"/></svg>Claude Opus 5.5</span>
+                <span class="chip">High</span>
+                <span class="send" id="send"><svg class="i"><use href="#i-up"/></svg></span>
+              </div>
+            </div>
+            <div class="c-card c-link">
+              <div class="lhead">Slack: Lena Park in #partnerships</div>
+              <div class="search" id="search"><svg class="i"><use href="#i-search"/></svg><span class="q"><span id="q-text"></span><span class="caret"></span><span class="ph" id="q-ph">Search threads</span></span></div>
+              <div class="list">
+                <div class="divider first">Working</div>
+                <div class="opt" id="opt-lena"><span class="work"><svg class="i"><use href="#i-work"/></svg></span><span class="txt"><span class="nm" id="opt-lena-nm">Review Lena's revised partnership terms</span><span class="meta">Main Workspace · 1 min ago</span></span><svg class="i chk"><use href="#i-check"/></svg></div>
+                <div class="divider q-hide">Unsettled</div>
+                <div class="opt q-hide"><span class="nowork"></span><span class="txt"><span class="nm">Plan the December workshop agenda</span><span class="meta">Main Workspace · 2 h ago</span></span></div>
+                <div class="opt q-hide"><span class="nowork"></span><span class="txt"><span class="nm">Homepage copy, round two</span><span class="meta">Main Workspace · yesterday</span></span></div>
+                <div class="divider">Settled</div>
+                <div class="opt settled"><span class="nowork"></span><span class="txt"><span class="nm" id="opt-old-nm">Partner onboarding checklist</span><span class="meta">Main Workspace · last week</span></span></div>
+              </div>
+            </div>
+            <div style="height:20px"></div>
+          </div>
+        </div>
+        <div class="c-mini"><div class="spin"></div><svg class="i tick"><use href="#i-check"/></svg><span id="mini-text">Starting thread</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pop">
+    <div class="ph"><span>1 thread links this</span><span class="icon-b" style="width:24px;height:24px"><svg class="g" style="width:16px;height:16px"><use href="#i-link"/></svg></span></div>
+    <div class="list">
+      <div class="divider first">Working</div>
+      <div class="opt" id="pop-lena"><span class="work"><svg class="i"><use href="#i-work"/></svg></span><span class="txt"><span class="nm">Review Lena's revised partnership terms</span><span class="meta">Main Workspace · 2 min ago</span></span></div>
+    </div>
+  </div>
+
+  <div id="t3">
+    <div class="t3-body">
+      <div class="t3-side">
+        <div class="t3-brand"><b>T3</b><span>Code</span><span class="sp"></span><svg class="i" style="color:var(--t3-muted)"><use href="#i-panel"/></svg></div>
+        <div class="t3-act"><svg class="i"><use href="#i-pen"/></svg>New thread</div>
+        <div class="t3-act"><svg class="i"><use href="#i-search"/></svg>Search</div>
+        <div class="t3-list" id="t3-active">
+          <div class="card recede"><div class="l1"><span class="pf">M</span><span class="pn">Main Workspace</span><span class="stat time">2h</span></div><div class="l2">Plan the December workshop agenda</div></div>
+          <div class="card recede"><div class="l1"><span class="pf">M</span><span class="pn">Main Workspace</span><span class="stat time">1d</span></div><div class="l2">Homepage copy, round two</div></div>
+        </div>
+        <div class="t3-fill"></div>
+        <div class="shelf"><svg class="i"><use href="#i-chev"/></svg>Working <span class="n" id="n-working">1</span></div>
+        <div class="t3-list" id="t3-working" style="margin-top:0">
+          <div class="card on" id="card-lena"><div class="l1"><span class="pf">M</span><span class="pn">Main Workspace</span>
+            <span class="stat working" id="lena-stat"></span>
+            <span class="settle" id="lena-settle"><svg class="i"><use href="#i-check"/></svg>Settle</span></div>
+            <div class="l2">Review Lena's revised partnership terms</div></div>
+        </div>
+        <div class="shelf"><svg class="i" style="transform:rotate(-90deg)"><use href="#i-chev"/></svg>Settled <span class="n" id="n-settled">12</span></div>
+        <div class="undo" id="undo">Settled, <u>Ctrl+Z to undo</u></div>
+      </div>
+      <div class="t3-main">
+        <div class="t3-h"><span class="pf"></span><span class="crumb">Main Workspace</span><span class="sep">/</span><span class="t">Review Lena's revised partnership terms</span></div>
+        <div class="t3-conv"><div class="t3-col" id="t3-col">
+          <div class="umsg">
+            <div>Gmail: Revised partnership terms</div>
+            <div class="lk">mail.google.com/mail/u/0/#inbox/FMfcgzQXk…</div>
+            <div style="margin-top:8px">Check the new terms against our contract and draft my reply.</div>
+          </div>
+          <div class="working" id="working"><span id="working-t">Working for 2m 04s</span></div>
+          <div class="amsg">
+            <p id="a1">I read Lena's email and the signed contract, <code>Contract v3</code>.</p>
+            <p id="a2">Two changes matter: payment moves from 30 to 45 days, and exclusivity now covers the EU only. Everything else matches what you signed.</p>
+            <p id="a3">Your reply is saved as a Gmail draft in her thread. It accepts the EU scope, asks to keep 30-day payment and suggests closing on Thursday.</p>
+          </div>
+        </div></div>
+        <div class="t3-comp"><div class="ph">Ask anything, @tag files/folders, or use / to show available commands</div>
+          <div class="bar"><span class="grow"></span><span class="chip model"><svg class="i" viewBox="0 0 24 24" style="fill:#d97757;stroke:none"><use href="#i-claude"/></svg>Claude Opus 5.5</span><span class="chip">High</span><span class="send"><svg class="i"><use href="#i-up"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cursor"><svg viewBox="0 0 22 22"><path d="M3 2 L3 18 L7.2 14.2 L10 20.5 L12.8 19.3 L10.1 13.2 L16 13.2 Z" fill="#fff" stroke="#000" stroke-width="1.3" stroke-linejoin="round"/></svg></div>
+ </div></div>
+ <div id="caption"><span id="cap"></span></div>
+</div></div>
+
+<div id="controls">
+  <button id="play" aria-label="Pause"><svg class="i"><use href="#i-pause"/></svg></button>
+  <div id="chapters"></div>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-bubble" viewBox="0 0 16 16"><path d="M3.5 2.25H12.5L14 3.75V9.75L12.5 11.25H7.5L4.5 13.75V11.25H3.5L2 9.75V3.75Z"/></symbol>
+    <symbol id="i-start" viewBox="0 0 16 16"><path d="M3.5 2.25H12.5L14 3.75V9.75L12.5 11.25H7.5L4.5 13.75V11.25H3.5L2 9.75V3.75Z"/><path d="M8 4.5V9M5.75 6.75H10.25"/></symbol>
+    <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 9.5L9.5 6.5"/><path d="M7.25 4.25L8.5 3A2.47 2.47 0 0 1 12 6.5L10.75 7.75"/><path d="M8.75 11.75L7.5 13A2.47 2.47 0 0 1 4 9.5L5.25 8.25"/><path d="M12.5 10.25V14.25M10.5 12.25H14.5"/></symbol>
+    <symbol id="i-work" viewBox="0 0 24 24"><path d="M10.1 2.182a10 10 0 0 1 3.8 0"/><path d="M13.9 21.818a10 10 0 0 1-3.8 0"/><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"/><path d="M2.182 13.9a10 10 0 0 1 0-3.8"/><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"/><path d="M21.818 10.1a10 10 0 0 1 0 3.8"/><path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/></symbol>
+    <symbol id="i-done" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-reload" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></symbol>
+    <symbol id="i-rows" viewBox="0 0 24 24"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="18" height="7" x="3" y="14" rx="1"/></symbol>
+    <symbol id="i-dense" viewBox="0 0 24 24"><path d="M3 5h18M3 10h18M3 15h18M3 20h18"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
+    <symbol id="i-claude" viewBox="0 0 24 24"><path d="M12 1.5l1.6 7.3 6.9-2.8-5.4 5.2 5.4 5.2-6.9-2.8L12 21l-1.6-7.4-6.9 2.8 5.4-5.2L3.5 6l6.9 2.8z"/></symbol>
+  </defs>
+</svg>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), wrap = $('wrap'), cam = $('cam'), view = $('view'), composer = $('composer'), cursorEl = $('cursor');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let scale = 1;
+  const fit = () => { scale = wrap.clientWidth / 1280; stage.style.transform = `scale(${scale})`; };
+  new ResizeObserver(fit).observe(wrap); fit();
+
+  // The add-on's bubble glyphs (send-to-t3/extension/src/linked.js)
+  const BUB = 'M3.5 2.25H12.5L14 3.75V9.75L12.5 11.25H7.5L4.5 13.75V11.25H3.5L2 9.75V3.75Z';
+  const bsvg = inner => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="${BUB}"/>${inner}</svg>`;
+  const setBub = (id, state, animate) => {
+    const b = $(id); b.dataset.link = state;
+    b.innerHTML = state === 'settled' ? bsvg('<path d="M5.5 6.9L7.3 8.6L10.5 5.2"/>')
+      : state === 'open' ? bsvg('<text x="8" y="9.2" fill="currentColor" stroke="none" font-family="system-ui, sans-serif" font-size="7" font-weight="700" text-anchor="middle">1</text>') : '';
+    b.classList.remove('pop'); if (animate) { void b.offsetWidth; b.classList.add('pop'); }
+  };
+
+  // Clock: sleeps count only while playing; a jump cancels what's in flight.
+  let token = 0, paused = false, held = [];
+  const CANCEL = Symbol('cancel');
+  const sleep = ms => { const my = token; return new Promise((res, rej) => {
+    let left = ms, last = performance.now();
+    const tick = now => { if (my !== token) return rej(CANCEL); if (!paused) left -= now - last; last = now; left <= 0 ? res() : requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }); };
+
+  // Camera: world coordinates are the 1280x648 viewport at zoom 1.
+  const camSet = (x, y, z) => {
+    const tx = Math.min(0, Math.max(1280 - 1280 * z, 640 - x * z)), ty = Math.min(0, Math.max(648 - 648 * z, 324 - y * z));
+    cam.style.transform = `translate(${tx}px, ${ty}px) scale(${z})`;
+  };
+  const world = (el, fx = .5, fy = .5) => {
+    const r = el.getBoundingClientRect(), v = $('viewport').getBoundingClientRect();
+    const m = new DOMMatrix(getComputedStyle(cam).transform);
+    const sx = (r.left - v.left + r.width * fx) / scale, sy = (r.top - v.top + r.height * fy) / scale;
+    return [(sx - m.e) / m.a, (sy - m.f) / m.d];
+  };
+  const camOn = async (el, z, ms = 1200, fx = .5, fy = .5) => { const [x, y] = world(el, fx, fy); camSet(x, y, z); if (ms) await sleep(ms); };
+  const camWide = async (ms = 1200) => { camSet(640, 324, 1); if (ms) await sleep(ms); };
+
+  // Cursor (inside the camera, in world coordinates)
+  let cx = 900, cy = 520;
+  const placeCursor = (x, y) => { cx = x; cy = y; cursorEl.getAnimations().forEach(a => a.cancel()); cursorEl.style.transform = `translate(${x - 3}px, ${y - 2}px)`; };
+  const move = async (el, ms = 750, fx, fy) => {
+    const [x, y] = Array.isArray(el) ? el : world(el, fx, fy);
+    const a = cursorEl.animate([{ transform: `translate(${cx - 3}px, ${cy - 2}px)` }, { transform: `translate(${x - 3}px, ${y - 2}px)` }],
+      { duration: ms, easing: 'cubic-bezier(.5,0,.2,1)', fill: 'forwards' });
+    cx = x; cy = y;
+    await sleep(ms + 20);
+    a.cancel(); cursorEl.style.transform = `translate(${x - 3}px, ${y - 2}px)`;
+  };
+  const click = async () => {
+    cursorEl.classList.add('down');
+    const r = document.createElement('div'); r.className = 'ripple'; r.style.left = cx + 'px'; r.style.top = cy + 'px';
+    cam.appendChild(r); setTimeout(() => r.remove(), 650);
+    await sleep(150); cursorEl.classList.remove('down'); await sleep(100);
+  };
+  const hot = (el, on = true) => el.classList.toggle('hot', on);
+
+  const cap = $('cap');
+  const say = async (t, instant) => {
+    if (instant || !cap.textContent) { cap.textContent = t; cap.classList.remove('out'); return; }
+    if (cap.textContent === t) return;
+    cap.classList.add('out'); await sleep(250); cap.textContent = t; cap.classList.remove('out');
+  };
+
+  // Composer
+  const setTa = t => { $('ta-text').textContent = t; $('ta-ph').style.display = t ? 'none' : ''; $('send').classList.toggle('ready', !!t); };
+  const setQ = t => {
+    $('q-text').textContent = t; $('q-ph').style.display = t ? 'none' : '';
+    document.querySelectorAll('#composer .q-hide').forEach(e => e.classList.toggle('gone', !!t));
+    $('opt-lena-nm').innerHTML = t ? "Review Lena's revised <span class=\"hl\">partner</span>ship terms" : "Review Lena's revised partnership terms";
+    $('opt-old-nm').innerHTML = t ? '<span class="hl">Partner</span> onboarding checklist' : 'Partner onboarding checklist';
+    $('opt-lena').classList.toggle('active', !!t);
+  };
+  const openComposer = (src, ttl) => {
+    composer.classList.remove('was-new', 'was-link');
+    $('ctx-src').textContent = src; $('ctx-ttl').textContent = ttl;
+    $('tab-new').classList.add('on'); $('tab-link').classList.remove('on');
+    setTa(''); setQ(''); $('opt-lena').classList.remove('checked', 'active'); $('ta').classList.remove('focus'); $('search').classList.remove('focus');
+    composer.dataset.state = 'new';
+  };
+
+  const toSlack = () => { view.dataset.app = 'slack'; $('url').textContent = 'app.slack.com/client/activity'; $('url-fav').style.background = '#4a154b'; $('url-fav').innerHTML = '<svg class="i" style="color:#fff"><use href="#i-msg"/></svg>'; };
+  const toGmail = () => { view.dataset.app = 'gmail'; $('url').textContent = 'mail.google.com'; $('url-fav').style.background = '#d93025'; $('url-fav').innerHTML = '<svg class="i" style="color:#fff"><use href="#i-mail"/></svg>'; };
+  const lenaStat = kind => {
+    const s = $('lena-stat');
+    s.className = 'stat ' + kind;
+    s.innerHTML = kind === 'working' ? '<svg class="i"><use href="#i-work"/></svg><span>Working 2m</span>'
+      : '<svg class="i"><use href="#i-done"/></svg><span>Done</span>';
+  };
+  const lenaDone = () => {
+    lenaStat('done'); $('t3-active').prepend($('card-lena')); $('n-working').textContent = '0';
+    $('working').classList.add('gone2'); ['a1', 'a2', 'a3'].forEach(i => $(i).classList.add('in'));
+  };
+  const lenaSettled = () => { $('card-lena').classList.add('leaving'); $('n-settled').textContent = '13'; $('undo').classList.add('show'); };
+
+  const reset = () => {
+    toGmail();
+    document.querySelectorAll('.hover, .hot, .focus, .bump').forEach(e => e.classList.remove('hover', 'hot', 'focus', 'bump'));
+    setBub('bub-gmail', 'none'); setBub('bub-slack', 'none');
+    composer.dataset.state = 'hidden'; composer.classList.remove('was-new', 'was-link'); setTa(''); setQ('');
+    $('pop').classList.remove('show'); $('t3').classList.remove('show');
+    $('t3-working').prepend($('card-lena')); $('card-lena').classList.remove('leaving'); lenaStat('working');
+    $('n-working').textContent = '1'; $('n-settled').textContent = '12'; $('undo').classList.remove('show');
+    $('working').classList.remove('gone2'); $('working-t').textContent = 'Working for 2m 04s';
+    ['a1', 'a2', 'a3'].forEach(i => $(i).classList.remove('in'));
+    camSet(640, 324, 1); placeCursor(900, 520);
+  };
+
+  const TEXT = 'Check the new terms against our contract and draft my reply.';
+  const typeInto = async (el, text, per = 3, ms = 40) => {
+    for (let i = per; i < text.length + per; i += per) { el.textContent = text.slice(0, i); await sleep(ms); }
+  };
+  const showPop = () => {
+    const [bx, by] = world($('bub-slack'), 0, 1), p = $('pop');
+    p.style.left = (bx - 8) + 'px'; p.style.top = (by + 8) + 'px'; p.classList.add('show');
+  };
+  const scenes = [
+    { label: 'Email', cap: "One click on an email opens T3's composer, with the email attached.",
+      async run() {
+        await say(this.cap); await sleep(300);
+        camOn($('row-lena'), 1.35, 0, .5);
+        const m = move($('g-start'), 950); await sleep(450); $('row-lena').classList.add('hover'); await m;
+        hot($('g-start')); await sleep(150); await click();
+        openComposer('Gmail', 'Revised partnership terms'); hot($('g-start'), false); $('row-lena').classList.remove('hover');
+        camOn(composer, 1.5, 0, .5, .5); await sleep(350);
+        await move($('ta'), 700, .3, .45); await click(); $('ta').classList.add('focus'); $('ta-ph').style.display = 'none';
+        await typeInto($('ta-text'), TEXT); setTa(TEXT); await sleep(250);
+        await move($('send'), 500); hot($('send')); await sleep(120); await click(); hot($('send'), false); $('ta').classList.remove('focus');
+        composer.classList.add('was-new'); $('mini-text').textContent = 'Starting thread'; composer.dataset.state = 'mini';
+        await sleep(650); $('mini-text').textContent = 'Thread started'; composer.dataset.state = 'done';
+        await sleep(500); composer.dataset.state = 'hidden';
+        say('The email now shows a blue bubble: a thread is working on it.');
+        await camOn($('row-lena'), 1.9, 700, .3, .5);
+        setBub('bub-gmail', 'open', true);
+        await move($('bub-gmail'), 550, 1.8, 1.3); await sleep(1100);
+      },
+      end() { composer.dataset.state = 'hidden'; setBub('bub-gmail', 'open'); camSet(...world($('row-lena'), .3, .5), 1.9); placeCursor(...world($('bub-gmail'), 1.8, 1.3)); } },
+
+    { label: 'Slack', cap: 'Lena brings up the same deal in Slack. Link it to that thread.',
+      async run() {
+        await say(this.cap);
+        toSlack(); camOn($('act-lena'), 1.7, 0, .45, .5); await sleep(250);
+        const m = move($('s-start'), 950); await sleep(500); $('act-lena').classList.add('hover'); await m;
+        hot($('s-start')); await sleep(150); await click(); hot($('s-start'), false);
+        openComposer('Slack', 'Lena Park in #partnerships');
+        camOn(composer, 1.25, 0, .5, .5); await sleep(300);
+        await move($('tab-link'), 600); hot($('tab-link')); await sleep(120); await click(); hot($('tab-link'), false);
+        $('tab-link').classList.add('on'); $('tab-new').classList.remove('on'); composer.dataset.state = 'link';
+        await sleep(350); $('search').classList.add('focus'); $('q-ph').style.display = 'none';
+        await typeInto($('q-text'), 'partner', 1, 50); setQ('partner'); await sleep(300);
+        await move($('opt-lena'), 500, .4); await sleep(80); await click();
+        $('opt-lena').classList.add('checked'); $('search').classList.remove('focus'); await sleep(250);
+        composer.classList.add('was-link'); $('mini-text').textContent = 'Linked'; composer.dataset.state = 'done';
+        await sleep(550); composer.dataset.state = 'hidden';
+        say('Now the Slack message shows the same thread.');
+        await camOn($('act-lena'), 1.7, 700, .45, .5);
+        setBub('bub-slack', 'open', true);
+        await move($('bub-slack'), 500, .5, 1.6); await sleep(1100);
+      },
+      end() { toSlack(); composer.dataset.state = 'hidden'; $('act-lena').classList.add('hover'); setBub('bub-slack', 'open'); camSet(...world($('act-lena'), .45, .5), 1.7); placeCursor(...world($('bub-slack'), .5, 1.6)); } },
+
+    { label: 'Open', cap: 'Click a bubble to open its thread in T3.',
+      async run() {
+        await say(this.cap);
+        hot($('bub-slack')); await sleep(120); await click(); showPop(); await sleep(750);
+        await move($('pop-lena'), 450, .4); $('pop-lena').classList.add('active'); await sleep(120); await click();
+        $('pop').classList.remove('show'); $('pop-lena').classList.remove('active'); hot($('bub-slack'), false); $('act-lena').classList.remove('hover');
+        lenaDone(); $('t3').classList.add('show');
+        camWide(0); await move([700, 430], 700); await sleep(500);
+      },
+      end() { $('act-lena').classList.remove('hover'); $('t3').classList.add('show'); lenaDone(); camSet(640, 324, 1); placeCursor(700, 430); } },
+
+    { label: 'Settle', cap: "When it's done, settle it in T3.",
+      async run() {
+        await say(this.cap);
+        camOn($('card-lena'), 1.8, 0, .6, 1.4);
+        const m = move($('card-lena'), 850, .55, .7); await sleep(450); $('card-lena').classList.add('hover'); await m;
+        await move($('lena-settle'), 400); hot($('lena-settle')); await sleep(150); await click();
+        lenaSettled(); await sleep(250); $('n-settled').classList.add('bump'); await sleep(750);
+        say('Slack and the email both show a tick: the work is done.');
+        $('t3').classList.remove('show');
+        await camOn($('act-lena'), 1.7, 750, .45, .5); setBub('bub-slack', 'settled', true);
+        await move($('bub-slack'), 450, .5, 1.6); await sleep(800);
+        toGmail(); await camOn($('row-lena'), 1.9, 750, .3, .5); setBub('bub-gmail', 'settled', true);
+        await move($('bub-gmail'), 450, 1.8, 1.3); await sleep(900);
+        await camWide(800); await sleep(300);
+      },
+      end() { $('t3').classList.remove('show'); lenaDone(); lenaSettled(); setBub('bub-slack', 'settled'); setBub('bub-gmail', 'settled'); toGmail(); camSet(640, 324, 1); placeCursor(...world($('bub-gmail'), 1.8, 1.3)); } },
+  ];
+
+  const chapEls = scenes.map((s, i) => {
+    const b = document.createElement('button'); b.className = 'chap';
+    b.innerHTML = `<span class="fill"></span><span>${i + 1}. ${s.label}</span>`;
+    b.onclick = () => jump(i); $('chapters').appendChild(b); return b;
+  });
+  const mark = i => chapEls.forEach((b, j) => { b.classList.toggle('on', j === i); b.querySelector('.fill').style.width = j < i ? '100%' : '0'; });
+  const settleFrame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => { stage.classList.remove('instant'); r(); })));
+  const resume = () => { held.forEach(a => { try { a.play(); } catch (e) {} }); held = []; paused = false; setPlayIcon(); };
+
+  async function jump(i) {
+    token++; resume();
+    stage.classList.add('instant');
+    reset();
+    for (let j = 0; j < i; j++) scenes[j].end();
+    if (reduced) scenes[i].end();
+    await say(scenes[i].cap, true);
+    await settleFrame();
+    mark(i);
+    if (!reduced) run(i);
+  }
+  async function run(i) {
+    try {
+      for (let k = i, first = true; ; k = (k + 1) % scenes.length, first = false) {
+        if (k === 0 && !first) { stage.classList.add('instant'); reset(); await say(scenes[0].cap, true); await settleFrame(); }
+        mark(k); (window.demoTimes ||= []).push([k, Math.round(performance.now())]);
+        await scenes[k].run();
+        chapEls[k].querySelector('.fill').style.width = '100%';
+      }
+    } catch (e) { if (e !== CANCEL) console.error(e); }
+  }
+  const setPlayIcon = () => { $('play').innerHTML = `<svg class="i"><use href="#i-${paused ? 'play' : 'pause'}"/></svg>`; $('play').setAttribute('aria-label', paused ? 'Play' : 'Pause'); };
+  $('play').onclick = () => {
+    if (paused) return resume();
+    paused = true; held = document.getAnimations().filter(a => a.playState === 'running'); held.forEach(a => a.pause()); setPlayIcon();
+  };
+  if (reduced) $('play').style.display = 'none';
+  window.demo = { jump };
+  jump(0);
+})();
+</script>
+</body>
+</html>
